@@ -32,11 +32,15 @@ Parameters:
 
   AdminPubkey:
     Type: String
-    Description: Admin public key (hex) for relay management
+    Description: Primary admin public key (hex) - used as relay pubkey
     MinLength: 64
     MaxLength: 64
     AllowedPattern: '[0-9a-f]{64}'
     ConstraintDescription: Must be a 64-character hex string
+
+  AdminPubkeys:
+    Type: String
+    Description: Formatted admin pubkeys for ADMIN_PUBKEYS env var (e.g. "key1","key2")
 
 Resources:
   # ACM Certificate for SSL/TLS
@@ -272,7 +276,7 @@ Resources:
             - Name: RELAY_PUBKEY
               Value: !Ref AdminPubkey
             - Name: ADMIN_PUBKEYS
-              Value: !Sub '"${AdminPubkey}"'
+              Value: !Ref AdminPubkeys
           MountPoints:
             - SourceVolume: zooid-data
               ContainerPath: /app/data

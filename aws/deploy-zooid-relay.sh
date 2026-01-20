@@ -8,7 +8,7 @@ set -e
 STACK_NAME="${1:-sphere-zooid-relay}"
 REGION="${2:-me-central-1}"
 RELAY_SECRET_KEY="${3:-}"
-ADMIN_PUBKEY="${4:-}"
+ADMIN_PUBKEYS_FILE="admin-pubkeys.txt"
 
 echo "=============================================="
 echo "  Zooid NIP-29 Relay Deployment for Sphere"
@@ -23,32 +23,63 @@ echo ""
 if [ -z "$RELAY_SECRET_KEY" ]; then
     echo "ERROR: Relay secret key is required"
     echo ""
-    echo "Usage: $0 <stack-name> <region> <relay-secret-key> <admin-pubkey>"
+    echo "Usage: $0 <stack-name> <region> <relay-secret-key>"
     echo ""
     echo "Generate a new key pair:"
     echo "  # Using openssl:"
     echo "  openssl rand -hex 32"
     echo ""
+    echo "Admin pubkeys are read from $ADMIN_PUBKEYS_FILE (one per line)"
     exit 1
 fi
 
-if [ -z "$ADMIN_PUBKEY" ]; then
-    echo "ERROR: Admin public key is required"
-    echo ""
-    echo "Usage: $0 <stack-name> <region> <relay-secret-key> <admin-pubkey>"
-    exit 1
-fi
-
-# Validate key formats
+# Validate relay secret key format
 if ! [[ "$RELAY_SECRET_KEY" =~ ^[0-9a-f]{64}$ ]]; then
     echo "ERROR: Relay secret key must be a 64-character hex string"
     exit 1
 fi
 
-if ! [[ "$ADMIN_PUBKEY" =~ ^[0-9a-f]{64}$ ]]; then
-    echo "ERROR: Admin public key must be a 64-character hex string"
+# Read and validate admin pubkeys from file
+if [ ! -f "$ADMIN_PUBKEYS_FILE" ]; then
+    echo "ERROR: Admin pubkeys file not found: $ADMIN_PUBKEYS_FILE"
+    echo "Create the file with one pubkey per line (64-char hex)"
     exit 1
 fi
+
+ADMIN_PUBKEYS_FORMATTED=""
+FIRST_ADMIN_PUBKEY=""
+while IFS= read -r pubkey || [ -n "$pubkey" ]; do
+    # Skip empty lines and comments
+    [[ -z "$pubkey" || "$pubkey" =~ ^# ]] && continue
+
+    # Validate pubkey format
+    if ! [[ "$pubkey" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "ERROR: Invalid pubkey format: $pubkey"
+        echo "Each pubkey must be a 64-character hex string"
+        exit 1
+    fi
+
+    # Store first pubkey for RELAY_PUBKEY
+    if [ -z "$FIRST_ADMIN_PUBKEY" ]; then
+        FIRST_ADMIN_PUBKEY="$pubkey"
+    fi
+
+    # Build formatted string: "key1","key2",...
+    if [ -z "$ADMIN_PUBKEYS_FORMATTED" ]; then
+        ADMIN_PUBKEYS_FORMATTED="\"$pubkey\""
+    else
+        ADMIN_PUBKEYS_FORMATTED="$ADMIN_PUBKEYS_FORMATTED,\"$pubkey\""
+    fi
+done < "$ADMIN_PUBKEYS_FILE"
+
+if [ -z "$FIRST_ADMIN_PUBKEY" ]; then
+    echo "ERROR: No valid pubkeys found in $ADMIN_PUBKEYS_FILE"
+    exit 1
+fi
+
+echo "Admin pubkeys loaded from $ADMIN_PUBKEYS_FILE"
+echo "Primary admin: $FIRST_ADMIN_PUBKEY"
+echo ""
 
 # Check if stack exists
 if aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION &>/dev/null; then
@@ -72,14 +103,27 @@ echo "Template valid"
 # Deploy stack
 echo ""
 echo "Deploying stack (this will take 10-15 minutes)..."
+
+# Create parameters JSON file to avoid shell quoting issues
+PARAMS_FILE=$(mktemp)
+# Escape double quotes for JSON
+ADMIN_PUBKEYS_JSON_ESCAPED=$(echo "$ADMIN_PUBKEYS_FORMATTED" | sed 's/"/\\"/g')
+cat > "$PARAMS_FILE" << EOF
+[
+  {"ParameterKey": "RelaySecretKey", "ParameterValue": "$RELAY_SECRET_KEY"},
+  {"ParameterKey": "AdminPubkey", "ParameterValue": "$FIRST_ADMIN_PUBKEY"},
+  {"ParameterKey": "AdminPubkeys", "ParameterValue": "$ADMIN_PUBKEYS_JSON_ESCAPED"}
+]
+EOF
+
 aws cloudformation $OPERATION \
     --stack-name $STACK_NAME \
     --template-body file://zooid-relay-cloudformation.yaml \
-    --parameters \
-        ParameterKey=RelaySecretKey,ParameterValue="$RELAY_SECRET_KEY" \
-        ParameterKey=AdminPubkey,ParameterValue="$ADMIN_PUBKEY" \
+    --parameters file://"$PARAMS_FILE" \
     --capabilities CAPABILITY_IAM \
     --region $REGION
+
+rm -f "$PARAMS_FILE"
 
 echo ""
 echo "=============================================="

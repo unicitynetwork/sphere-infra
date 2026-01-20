@@ -21,7 +21,8 @@ Deploys the Zooid relay for NIP-29 group chat functionality in Sphere.
 
 1. AWS CLI configured with appropriate credentials
 2. Domain `unicity.network` accessible in Gandi DNS
-3. Generate relay keypair (64-char hex strings)
+3. Generate relay secret key (64-char hex string)
+4. Admin pubkeys listed in `admin-pubkeys.txt` (one per line)
 
 ### Generate Relay Keys
 
@@ -29,9 +30,16 @@ Deploys the Zooid relay for NIP-29 group chat functionality in Sphere.
 # Generate a random secret key
 RELAY_SECRET=$(openssl rand -hex 32)
 echo "Secret Key: $RELAY_SECRET"
+```
 
-# Derive public key (requires nostr tools or similar)
-# Or generate using any Nostr key generation tool
+### Admin Pubkeys
+
+Admin pubkeys are stored in `admin-pubkeys.txt` (one per line, 64-char hex):
+
+```bash
+# Example admin-pubkeys.txt
+84de98f7dc200bf644ee3952b76ba201519e02773d9308af798975546064149d
+a8dc385a04cd078244d0f82c191fbdd8c9f5fd5347e55b7fe45ad9c260792f8a
 ```
 
 ### Deploy
@@ -42,8 +50,7 @@ cd /Users/pavelg/work/unicity/sphere-infra/aws
 ./deploy-zooid-relay.sh \
     sphere-zooid-relay \
     me-central-1 \
-    <relay-secret-key-hex> \
-    <admin-pubkey-hex>
+    <relay-secret-key-hex>
 ```
 
 ### DNS Configuration
