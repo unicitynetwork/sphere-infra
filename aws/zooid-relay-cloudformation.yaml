@@ -277,6 +277,8 @@ Resources:
               Value: !Ref AdminPubkey
             - Name: ADMIN_PUBKEYS
               Value: !Ref AdminPubkeys
+            - Name: GROUPS_ADMIN_CREATE_ONLY
+              Value: 'true'
           MountPoints:
             - SourceVolume: zooid-data
               ContainerPath: /app/data
