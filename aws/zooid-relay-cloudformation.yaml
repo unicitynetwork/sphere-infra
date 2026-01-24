@@ -18,7 +18,7 @@ Parameters:
 
   ContainerImage:
     Type: String
-    Default: ghcr.io/unicitynetwork/unicity-relay:sha-9473a9c
+    Default: ghcr.io/unicitynetwork/unicity-relay:sha-d62e6eb
     Description: Docker image for Zooid relay
 
   RelaySecretKey:
